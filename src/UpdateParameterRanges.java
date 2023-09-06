@@ -19,9 +19,11 @@ import star.mdx.MdxStudyParameterBase;
  */
 public class UpdateParameterRanges extends MdxMacro {
 
-    double percent = -25.0;
+    Method method = Method.ABSOLUTE;
+    double relative = -25.0;
+    double absolute = 0.1;
     double threshold = 1.0;
-    String study_name = "CADR25";
+    String study_name = "CADR7";
 
     MdxProject _proj;
     MdxDesignStudy _study;
@@ -37,30 +39,49 @@ public class UpdateParameterRanges extends MdxMacro {
         for (MdxStudyParameter p_i : params) {
             if (p_i.getParameterType() == MdxStudyParameterBase.ParameterType.CONTINUOUS) {
                 MdxContinuousParameterValue p_i_cont_value = p_i.getContinuousParameterValue();
-                double max = p_i_cont_value.getMaximumQuantity().getRawValue();
-                double min = p_i_cont_value.getMinimumQuantity().getRawValue();
-                double ratio = percent / 100.0;
-                if (abs(max) > threshold) {
-                    double delta_max = ratio * max;
-                    if (max == 0.0) {
-                        delta_max = ratio * min;
-                    }
-                    double max_sign = max > 0.0 ? 1.0 : -1.0;
-                    max = max + (max_sign * delta_max);
+                if (method == Method.ABSOLUTE) {
+                    updateAbsolute(p_i_cont_value);
+                } else {
+                    updateRelative(p_i_cont_value);
                 }
-
-                if (abs(min) > threshold) {
-                    double delta_min = ratio * min;
-                    if (min == 0.0) {
-                        delta_min = ratio * max;
-                    }
-                    double min_sign = min > 0.0 ? 1.0 : -1.0;
-                    min = min - (min_sign * delta_min);
-                }
-
-                p_i_cont_value.getMaximumQuantity().setValue(max);
-                p_i_cont_value.getMinimumQuantity().setValue(min);
             }
         }
+    }
+    
+    private void updateRelative(MdxContinuousParameterValue val) {
+        double max = val.getMaximumQuantity().getRawValue();
+        double min = val.getMinimumQuantity().getRawValue();
+        double ratio = relative / 100.0;
+        if (abs(max) > threshold) {
+            double delta_max = ratio * max;
+            if (max == 0.0) {
+                delta_max = ratio * min;
+            }
+            double max_sign = max > 0.0 ? 1.0 : -1.0;
+            max = max + (max_sign * delta_max);
+        }
+
+        if (abs(min) > threshold) {
+            double delta_min = ratio * min;
+            if (min == 0.0) {
+                delta_min = ratio * max;
+            }
+            double min_sign = min > 0.0 ? 1.0 : -1.0;
+            min = min - (min_sign * delta_min);
+        }
+
+        val.getMaximumQuantity().setValue(max);
+        val.getMinimumQuantity().setValue(min);
+    }
+    
+    private void updateAbsolute(MdxContinuousParameterValue val) {
+        double max = val.getMaximumQuantity().getRawValue();
+        double min = val.getMinimumQuantity().getRawValue();
+        val.getMaximumQuantity().setValue(max + absolute);
+        val.getMinimumQuantity().setValue(min - absolute);
+    }
+    
+    private enum Method {
+        ABSOLUTE, RELATIVE
     }
 }
