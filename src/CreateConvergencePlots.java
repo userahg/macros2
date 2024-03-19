@@ -14,13 +14,13 @@ public class CreateConvergencePlots extends StarMacro {
 
     boolean _clean_up = true;
     boolean _createAsy = true;
-    boolean _createOsc = true;
+    boolean _createOsc = false;
 
-    String[] _reportNames = {"CD", "CL"};
+    String[] _reportNames = {"CD", "CL", "Cm", "WBM"};
 
     /* MONOTONIC CONVERGENCE PROPERTIES*/
     double _asymptotic_range = 5.0E-5;    //Relative asymptotic convergence crit
-    int _n_samples = 50;
+    int _n_samples = 200;
 
     /* OSCILATING CONVERGENCE PROPERTIES*/
     int[] _moving_avgs = new int[]{5000, 10000};
@@ -148,7 +148,7 @@ public class CreateConvergencePlots extends StarMacro {
         er.setDefinition("${Iteration} < 10 ? 100 "
                 + " : (alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _max_tag + "}, 100)"
                 + " -  alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _min_tag + "}, 0))"
-                + " /  alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _mean_tag + "}, 1)/${" + _conv_crit_param_name_1 + "}");
+                + " /  alternateValue(abs(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _mean_tag + "}), 1)/${" + _conv_crit_param_name_1 + "}");
         ReportMonitor erRM = er.createMonitor();
         _tagManager.addTags(er, getTag());
         _tagManager.addTags(erRM, getTag());
