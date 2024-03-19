@@ -62,6 +62,7 @@ public class BeforeSolver extends StarMacro {
     }
     
     private void createSolutionHistorySnapshot(String snapshotName) {
+        _sim.println(MACRO_MESSAGE_TAG + "createSolutionHistorySnapshot method. Snapshot name = " + snapshotName);
         _solutionHist.createSnapshot(snapshotName);
         _solutionHist.rescanFile();
     }
