@@ -16,11 +16,12 @@ public class CreateConvergencePlots extends StarMacro {
     boolean _createAsy = true;
     boolean _createOsc = false;
 
-    String[] _reportNames = {"CD", "CL", "Cm", "WBM"};
+    String[] _reportNames = {"L_over_D"};
 
     /* MONOTONIC CONVERGENCE PROPERTIES*/
-    double _asymptotic_range = 5.0E-5;    //Relative asymptotic convergence crit
-    int _n_samples = 200;
+    double[] _asymptotic_range = new double[]{2.5e-4};    //Relative asymptotic convergence crit
+    int[] _n_samples = new int[]{150};
+    boolean[] _asymptotic_norm = new boolean[]{false};
 
     /* OSCILATING CONVERGENCE PROPERTIES*/
     int[] _moving_avgs = new int[]{5000, 10000};
@@ -38,9 +39,12 @@ public class CreateConvergencePlots extends StarMacro {
     private final String _min_tag = "Min";
     private final String _limit_tag = "Limit";
     private final String _expression_report_tag = "ER";
-    
+
     /* Tag indicates an object was created by CreateConvergencePlots java macro*/
     private final String _tag_name = "CBCCPJAVA";
+    Criteria[] _stoppingCriteria;
+    Report[] _reports;
+
     HashMap<String, ReportMonitor> _monitors = new HashMap<>();
     Simulation _sim;
     TagManager _tagManager;
@@ -54,13 +58,11 @@ public class CreateConvergencePlots extends StarMacro {
             if (_clean_up) {
                 deleteTaggedObjects();
             }
+            initialize();
             if (_createAsy) {
-                createAsymConvCritParameter();
-                for (String s : _reportNames) {
-                    Report r = _sim.getReportManager().getReport(s);
-                    createAsymStatisticsReports(r);
-                    createAsymConvReport(r);
-                    createAsymMonitorPlot(r);
+                createConvergedReport();
+                for (Criteria c : _stoppingCriteria) {
+                    c.create();
                 }
                 createAsymConvReport();
                 createAsymStoppingCriteria();
@@ -86,74 +88,7 @@ public class CreateConvergencePlots extends StarMacro {
         }
     }
 
-    private void createAsymConvCritParameter() {
-        GlobalParameterManager man = _sim.get(GlobalParameterManager.class);
-        for (ScalarGlobalParameter sgp : man.getObjectsOf(ScalarGlobalParameter.class)) {
-            if (sgp.getPresentationName().equals(_conv_crit_param_name_1)) {
-                sgp.getQuantity().setValue(_asymptotic_range);
-                return;
-            }
-        }
-        _sim.get(GlobalParameterManager.class).createGlobalParameter(ScalarGlobalParameter.class, "Scalar");
-        ScalarGlobalParameter convParam = (ScalarGlobalParameter) _sim.get(GlobalParameterManager.class).getObject("Scalar");
-        convParam.setPresentationName(_conv_crit_param_name_1);
-        convParam.getQuantity().setValue(_asymptotic_range);
-        _tagManager.addTags(convParam, getTag());
-    }
-
-    private void createAsymStatisticsReports(Report r) {
-        ReportMonitor rm = getReportMonitor(r);
-        StatisticsReport maxxReport = _sim.getReportManager().createReport(StatisticsReport.class);
-        StatisticsReport meanReport = _sim.getReportManager().createReport(StatisticsReport.class);
-        StatisticsReport minnReport = _sim.getReportManager().createReport(StatisticsReport.class);
-
-        maxxReport.setMonitor(rm);
-        maxxReport.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _max_tag);
-        maxxReport.setStatisticOption(StatisticOption.Maximum);
-        maxxReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
-        LastNSamplesFilter maxxNSamplesFilter = (LastNSamplesFilter) maxxReport.getSampleFilterManager().getObject("Last N Samples");
-        maxxNSamplesFilter.setNSamples(_n_samples);
-
-        meanReport.setMonitor(rm);
-        meanReport.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _mean_tag);
-        meanReport.setStatisticOption(StatisticOption.Mean);
-        meanReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
-        LastNSamplesFilter meanNSamplesFilter = (LastNSamplesFilter) meanReport.getSampleFilterManager().getObject("Last N Samples");
-        meanNSamplesFilter.setNSamples(_n_samples);
-
-        minnReport.setMonitor(rm);
-        minnReport.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _min_tag);
-        minnReport.setStatisticOption(StatisticOption.Minimum);
-        minnReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
-        LastNSamplesFilter minnNSamplesFilter = (LastNSamplesFilter) minnReport.getSampleFilterManager().getObject("Last N Samples");
-        minnNSamplesFilter.setNSamples(_n_samples);
-
-        _tagManager.addTags(maxxReport, getTag());
-        _tagManager.addTags(meanReport, getTag());
-        _tagManager.addTags(minnReport, getTag());
-        ReportMonitor maxxRM = maxxReport.createMonitor();
-        ReportMonitor meanRM = meanReport.createMonitor();
-        ReportMonitor minnRM = minnReport.createMonitor();
-        _tagManager.addTags(maxxRM, getTag());
-        _tagManager.addTags(meanRM, getTag());
-        _tagManager.addTags(minnRM, getTag());
-        _monitors.put(maxxReport.getPresentationName(), maxxRM);
-        _monitors.put(meanReport.getPresentationName(), meanRM);
-        _monitors.put(minnReport.getPresentationName(), minnRM);
-    }
-
-    private void createAsymConvReport(Report r) {
-        ExpressionReport er = _sim.getReportManager().createReport(ExpressionReport.class);
-        er.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _convergence_tag);
-        er.setDefinition("${Iteration} < 10 ? 100 "
-                + " : (alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _max_tag + "}, 100)"
-                + " -  alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _min_tag + "}, 0))"
-                + " /  alternateValue(abs(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _mean_tag + "}), 1)/${" + _conv_crit_param_name_1 + "}");
-        ReportMonitor erRM = er.createMonitor();
-        _tagManager.addTags(er, getTag());
-        _tagManager.addTags(erRM, getTag());
-        _monitors.put(er.getPresentationName(), erRM);
-
+    private void createConvergedReport() {
         for (ExpressionReport eri : _sim.getReportManager().getObjectsOf(ExpressionReport.class)) {
             if (eri.getPresentationName().equals(_converged_report_name) && eri.getDefinition().equals("1")) {
                 for (ReportMonitor rmi : _sim.getMonitorManager().getObjectsOf(ReportMonitor.class)) {
@@ -301,7 +236,7 @@ public class CreateConvergencePlots extends StarMacro {
         minLimitType.getLimit().setValue(converged_min);
         _tagManager.addTags(minSC, getTag());
     }
-    
+
     private void createOscillConvCritParameter() {
         GlobalParameterManager man = _sim.get(GlobalParameterManager.class);
         for (ScalarGlobalParameter sgp : man.getObjectsOf(ScalarGlobalParameter.class)) {
@@ -316,7 +251,7 @@ public class CreateConvergencePlots extends StarMacro {
         convParam.getQuantity().setValue(_oscill_range);
         _tagManager.addTags(convParam, getTag());
     }
-    
+
     private void createOscillMAStatisticsReports(Report r, int ma) {
         String mas = Integer.toString(ma);
         ReportMonitor rm = getReportMonitor(r);
@@ -324,20 +259,20 @@ public class CreateConvergencePlots extends StarMacro {
         StatisticsReport meanReport = _sim.getReportManager().createReport(StatisticsReport.class);
         StatisticsReport minnReport = _sim.getReportManager().createReport(StatisticsReport.class);
         ExpressionReport meanExpRpt = _sim.getReportManager().createReport(ExpressionReport.class);
-        
+
         meanReport.setMonitor(rm);
         meanReport.setPresentationName(r.getPresentationName() + " " + mas + " MA " + _mean_tag);
         meanReport.setStatisticOption(StatisticOption.Mean);
         meanReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
         LastNSamplesFilter meanNSamplesFilter = (LastNSamplesFilter) meanReport.getSampleFilterManager().getObject("Last N Samples");
         meanNSamplesFilter.setNSamples(ma);
-        
+
         meanExpRpt.setPresentationName(r.getPresentationName() + " " + mas + " MA " + _expression_report_tag);
         meanExpRpt.setDefinition("${" + meanReport.getPresentationName() + "}");
         ReportMonitor meanExpRM = meanExpRpt.createMonitor();
         _tagManager.addTags(meanExpRpt, getTag());
         _tagManager.addTags(meanExpRM, getTag());
-        _monitors.put(meanExpRpt.getPresentationName(), meanExpRM);        
+        _monitors.put(meanExpRpt.getPresentationName(), meanExpRM);
 
         maxxReport.setMonitor(meanExpRM);
         maxxReport.setPresentationName(r.getPresentationName() + " " + mas + " MA " + _max_tag);
@@ -366,7 +301,7 @@ public class CreateConvergencePlots extends StarMacro {
         _monitors.put(meanReport.getPresentationName(), meanRM);
         _monitors.put(minnReport.getPresentationName(), minnRM);
     }
-    
+
     private void createOscMAConvReport(Report r, int ma) {
         String mas = Integer.toString(ma);
         ExpressionReport er = _sim.getReportManager().createReport(ExpressionReport.class);
@@ -399,7 +334,7 @@ public class CreateConvergencePlots extends StarMacro {
         _tagManager.addTags(er2RM, getTag());
         _monitors.put(er2.getPresentationName(), er2RM);
     }
-    
+
     private void createOscillMonitorPlot(Report r, int ma) {
         String root = r.getPresentationName() + " " + Integer.toString(ma);
 
@@ -493,7 +428,7 @@ public class CreateConvergencePlots extends StarMacro {
         lineStyle_0.setColor(new DoubleVector(new double[]{0.8980392217636108, 0.7529411911964417, 0.2980392277240753}));
         lineStyle_0.setLineWidth(2.0);
     }
-    
+
     private void createOscillMAConvReport(int ma) {
         String mas = Integer.toString(ma);
         ExpressionReport er = _sim.getReportManager().createReport(ExpressionReport.class);
@@ -517,7 +452,7 @@ public class CreateConvergencePlots extends StarMacro {
         _tagManager.addTags(rm, getTag());
         _monitors.put(er.getPresentationName(), rm);
     }
-    
+
     private void createOscillMAStoppingCriteria(int ma) {
         String root = Integer.toString(ma) + " " + _oscillating_tag + " " + _convergence_tag;
         double converged_min = _reportNames.length + 0.5;
@@ -531,7 +466,7 @@ public class CreateConvergencePlots extends StarMacro {
         minLimitType.getLimit().setValue(converged_min);
         _tagManager.addTags(minSC, getTag());
     }
-    
+
     private ReportMonitor getReportMonitor(Report r) {
         for (Monitor m : _sim.getMonitorManager().getMonitors()) {
             if (m instanceof ReportMonitor) {
@@ -542,7 +477,7 @@ public class CreateConvergencePlots extends StarMacro {
             }
         }
         return r.createMonitor();
-    }    
+    }
 
     private void groupReports() {
         for (String s : _reportNames) {
@@ -559,7 +494,62 @@ public class CreateConvergencePlots extends StarMacro {
             }
         }
     }
-    
+
+    private void initialize() throws Exception {
+        validate();
+        for (int i = 0; i < _reportNames.length; i++) {
+            Criteria crit = new Criteria(_asymptotic_range[i], _n_samples[i], _asymptotic_norm[i]);
+            crit.report = _reports[i];
+            _stoppingCriteria[i] = crit;
+        }
+    }
+
+    private void validate() throws Exception {
+        int n_reports = _reportNames.length;
+        _reports = new Report[n_reports];
+        _stoppingCriteria = new Criteria[n_reports];
+        for (int i = 0; i < n_reports; i++) {
+            Report r = _sim.getReportManager().getReport(_reportNames[i]);
+            if (r == null) {
+                throw new Exception("No report " + _reportNames[i] + " found.");
+            }
+            _reports[i] = r;
+        }
+        if (_createAsy) {
+            int n_nSamples = _n_samples.length;
+            int n_ranges = _asymptotic_range.length;
+            int n_norm = _asymptotic_norm.length;
+            if (n_nSamples == 1) {
+                int oldValue = _n_samples[0];
+                _n_samples = new int[n_reports];
+                for (int i = 0; i < n_reports; i++) {
+                    _n_samples[i] = oldValue;
+                }
+            } else if (n_nSamples != n_reports) {
+                throw new Exception("The number of reports and the number of samples don't match.");
+            }
+            if (n_ranges == 1) {
+                double oldValue = _asymptotic_range[0];
+                _asymptotic_range = new double[n_reports];
+                for (int i = 0; i < n_reports; i++) {
+                    _asymptotic_range[i] = oldValue;
+                }
+            } else if (n_ranges != n_reports) {
+                throw new Exception("The number of reports and the number of ranges don't match.");
+            }
+            if (n_norm == 1) {
+                boolean oldValue = _asymptotic_norm[0];
+                _asymptotic_norm = new boolean[n_reports];
+                for (int i = 0; i < n_reports; i++) {
+                    _asymptotic_norm[i] = oldValue;
+                }
+            } else if (n_norm != n_reports) {
+                throw new Exception("The number of reports and the number of normalizations don't match.");
+            }
+
+        }
+    }
+
     /* Methods for identifying and deleting objects created by this macro*/
     private Collection<Tag> getTag() {
         Collection<Tag> tagCollection = new ArrayList<>();
@@ -593,13 +583,13 @@ public class CreateConvergencePlots extends StarMacro {
         steadySolver.getSolverStoppingCriterionManager().deleteChildren(toDeleteSC);
 
         /*Delete Tagged Monitor Plots*/
-        Collection<StarPlot> toDeleteSP = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteSP = new ArrayList<>();
         for (StarPlot sp : _sim.getPlotManager().getPlots()) {
             if (sp.getTagGroup().getObjects().contains(getTagAsTag())) {
                 toDeleteSP.add(sp);
             }
         }
-        _sim.getPlotManager().deleteChildren(toDeleteSP);
+        _sim.deleteObjects(toDeleteSP);
 
         /*Delete Tagged Monitors*/
         boolean hasMonitorsToDelete = true;
@@ -612,39 +602,41 @@ public class CreateConvergencePlots extends StarMacro {
         }
 
         /*Delete Tagged Reports*/
-        Collection<ExpressionReport> toDeleteER = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteER = new ArrayList<>();
         for (ExpressionReport eri : _sim.getReportManager().getObjectsOf(ExpressionReport.class)) {
             if (eri.getTagGroup().getObjects().contains(getTagAsTag())) {
                 toDeleteER.add(eri);
             }
         }
-        while (!toDeleteER.isEmpty()) {
-            _sim.getReportManager().deleteChildren(deleteExpressionReports(toDeleteER));
+        
+        count = 0;
+        while (!toDeleteER.isEmpty() && count < 10) {
+            _sim.deleteObjects(toDeleteER);
             toDeleteER.clear();
             for (ExpressionReport eri : _sim.getReportManager().getObjectsOf(ExpressionReport.class)) {
                 if (eri.getTagGroup().getObjects().contains(getTagAsTag())) {
                     toDeleteER.add(eri);
                 }
             }
+            count++;
         }
 
-        Collection<Report> toDeleteR = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteR = new ArrayList<>();
         for (Report r : _sim.getReportManager().getObjects()) {
             if (r.getTagGroup().getObjects().contains(getTagAsTag())) {
                 toDeleteR.add(r);
             }
         }
-        _sim.getReportManager().deleteChildren(toDeleteR);
-
+        _sim.deleteObjects(toDeleteR);
 
         /*Delete Tagged Parameters*/
-        Collection<ScalarGlobalParameter> toDeleteSGP = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteSGP = new ArrayList<>();
         for (ScalarGlobalParameter sgp : _sim.get(GlobalParameterManager.class).getObjectsOf(ScalarGlobalParameter.class)) {
             if (sgp.getTagGroup().getObjects().contains(getTagAsTag())) {
                 toDeleteSGP.add(sgp);
             }
         }
-        _sim.get(GlobalParameterManager.class).deleteChildren(toDeleteSGP);
+        _sim.deleteObjects(toDeleteSGP);
     }
 
     private Collection<ExpressionReport> deleteExpressionReports(Collection<ExpressionReport> expressionReports) {
@@ -667,8 +659,8 @@ public class CreateConvergencePlots extends StarMacro {
     }
 
     private void deleteExpressionANDStatisticsReports() {
-        Collection<StatisticsReport> toDeleteSR = new ArrayList<>();
-        Collection<ExpressionReport> toDeleteER = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteSR = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteER = new ArrayList<>();
         for (StatisticsReport sr : _sim.getReportManager().getObjectsOf(StatisticsReport.class)) {
             if (sr.getTagGroup().getObjects().contains(getTagAsTag())) {
                 boolean inUse = false;
@@ -709,12 +701,12 @@ public class CreateConvergencePlots extends StarMacro {
                 }
             }
         }
-        _sim.getReportManager().deleteChildren(toDeleteSR);
-        _sim.getReportManager().deleteChildren(toDeleteER);
+        _sim.deleteObjects(toDeleteSR);
+        _sim.deleteObjects(toDeleteER);
     }
 
     private boolean deleteMonitors() {
-        Collection<Monitor> toDeleteM = new ArrayList<>();
+        Collection<ClientServerObject> toDeleteM = new ArrayList<>();
         for (Monitor m : _sim.getMonitorManager().getMonitors()) {
             if (m.getTagGroup().getObjects().contains(getTagAsTag())) {
                 boolean inUse = false;
@@ -730,7 +722,7 @@ public class CreateConvergencePlots extends StarMacro {
                 }
             }
         }
-        _sim.getMonitorManager().deleteChildren(toDeleteM);
+        _sim.deleteObjects(toDeleteM);
 
         toDeleteM.clear();
         for (Monitor m : _sim.getMonitorManager().getMonitors()) {
@@ -1007,5 +999,208 @@ public class CreateConvergencePlots extends StarMacro {
         MonitorIterationStoppingCriterionMaxLimitType maxLimitType = (MonitorIterationStoppingCriterionMaxLimitType) maxStoppingCriterion.getCriterionType();
         maxLimitType.getLimit().setValue(converged_max - 0.5);
         _tagManager.addTags(maxStoppingCriterion, getTag());
+    }
+
+    private class Criteria {
+
+        double range;
+        int nSamples;
+        boolean normalized;
+        Report report;
+
+        Criteria(double range, int nSamples, boolean normalized) {
+            this.range = range;
+            this.nSamples = nSamples;
+            this.normalized = normalized;
+        }
+
+        void create() {
+            this.createAsymConvCritParameter();
+            this.createAsymStatisticsReports();
+            this.createAsymConvReport();
+            this.createAsymMonitorPlot();
+        }
+
+        void createAsymConvCritParameter() {
+            String name = this.getConvParamName();
+            GlobalParameterManager man = _sim.get(GlobalParameterManager.class);
+            for (ScalarGlobalParameter sgp : man.getObjectsOf(ScalarGlobalParameter.class)) {
+                if (sgp.getPresentationName().equals(name)) {
+                    sgp.getQuantity().setValue(this.range);
+                    return;
+                }
+            }
+            _sim.get(GlobalParameterManager.class).createGlobalParameter(ScalarGlobalParameter.class, "Scalar");
+            ScalarGlobalParameter convParam = (ScalarGlobalParameter) _sim.get(GlobalParameterManager.class).getObject("Scalar");
+            convParam.setPresentationName(name);
+            convParam.getQuantity().setValue(this.range);
+            _tagManager.addTags(convParam, getTag());
+        }
+
+        void createAsymStatisticsReports() {
+            Report r = this.report;
+            ReportMonitor rm = getReportMonitor(r);
+            StatisticsReport maxxReport = _sim.getReportManager().createReport(StatisticsReport.class);
+            StatisticsReport meanReport = _sim.getReportManager().createReport(StatisticsReport.class);
+            StatisticsReport minnReport = _sim.getReportManager().createReport(StatisticsReport.class);
+
+            maxxReport.setMonitor(rm);
+            maxxReport.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _max_tag);
+            maxxReport.setStatisticOption(StatisticOption.Maximum);
+            maxxReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
+            LastNSamplesFilter maxxNSamplesFilter = (LastNSamplesFilter) maxxReport.getSampleFilterManager().getObject("Last N Samples");
+            maxxNSamplesFilter.setNSamples(this.nSamples);
+
+            meanReport.setMonitor(rm);
+            meanReport.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _mean_tag);
+            meanReport.setStatisticOption(StatisticOption.Mean);
+            meanReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
+            LastNSamplesFilter meanNSamplesFilter = (LastNSamplesFilter) meanReport.getSampleFilterManager().getObject("Last N Samples");
+            meanNSamplesFilter.setNSamples(this.nSamples);
+
+            minnReport.setMonitor(rm);
+            minnReport.setPresentationName(r.getPresentationName() + " " + _asymptotic_tag + " " + _min_tag);
+            minnReport.setStatisticOption(StatisticOption.Minimum);
+            minnReport.setSampleFilterOption(SampleFilterOption.LastNSamples);
+            LastNSamplesFilter minnNSamplesFilter = (LastNSamplesFilter) minnReport.getSampleFilterManager().getObject("Last N Samples");
+            minnNSamplesFilter.setNSamples(this.nSamples);
+
+            _tagManager.addTags(maxxReport, getTag());
+            _tagManager.addTags(meanReport, getTag());
+            _tagManager.addTags(minnReport, getTag());
+            ReportMonitor maxxRM = maxxReport.createMonitor();
+            ReportMonitor meanRM = meanReport.createMonitor();
+            ReportMonitor minnRM = minnReport.createMonitor();
+            _tagManager.addTags(maxxRM, getTag());
+            _tagManager.addTags(meanRM, getTag());
+            _tagManager.addTags(minnRM, getTag());
+            _monitors.put(maxxReport.getPresentationName(), maxxRM);
+            _monitors.put(meanReport.getPresentationName(), meanRM);
+            _monitors.put(minnReport.getPresentationName(), minnRM);
+        }
+
+        void createAsymConvReport() {
+            Report r = this.report;
+            ExpressionReport er = _sim.getReportManager().createReport(ExpressionReport.class);
+            er.setPresentationName(this.getConvExpReportName());
+            String convParamName = this.getConvParamName();
+            String norm;
+            if (this.normalized) {
+                norm = " /  alternateValue(abs(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _mean_tag + "}), 1)/${" + convParamName + "}";
+            } else {
+                norm = " /${" + convParamName + "}";
+            }
+            er.setDefinition("${Iteration} < 10 ? 100 "
+                    + " : (alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _max_tag + "}, 100)"
+                    + " -  alternateValue(${" + r.getPresentationName() + " " + _asymptotic_tag + " " + _min_tag + "}, 0))"
+                    + norm);
+            ReportMonitor erRM = er.createMonitor();
+            _tagManager.addTags(er, getTag());
+            _tagManager.addTags(erRM, getTag());
+            _monitors.put(er.getPresentationName(), erRM);
+        }
+
+        void createAsymMonitorPlot() {
+            Report r = this.report;
+            String root = r.getPresentationName();
+
+            Iterator<Entry<String, ReportMonitor>> iterator = _monitors.entrySet().iterator();
+            Collection<Monitor> plotMonitors = new ArrayList<>();
+            while (iterator.hasNext()) {
+                Entry<String, ReportMonitor> entry = iterator.next();
+                if (entry.getKey().contains(r.getPresentationName())) {
+                    plotMonitors.add(entry.getValue());
+                } else if (entry.getKey().contains(_converged_report_name)) {
+                    plotMonitors.add(entry.getValue());
+                }
+            }
+
+            if (!plotMonitors.contains(getReportMonitor(r))) {
+                plotMonitors.add(getReportMonitor(r));
+            }
+
+            MonitorPlot mp = _sim.getPlotManager().createMonitorPlot(plotMonitors, root + " Asy Convergence");
+            _tagManager.addTags(mp, getTag());
+
+            Cartesian2DAxisManager axisManager = ((Cartesian2DAxisManager) mp.getAxisManager());
+            Cartesian2DAxis leftAxis = ((Cartesian2DAxis) axisManager.getAxis("Left Axis"));
+            AxisTitle leftAxisTitle = leftAxis.getTitle();
+            leftAxisTitle.setText(r.getPresentationName());
+            Cartesian2DAxis rightAxis = (Cartesian2DAxis) axisManager.createAxis(Cartesian2DAxis.Position.Right);
+            AxisTitle rightAxisTitle = rightAxis.getTitle();
+            rightAxisTitle.setText("Asymptote");
+            rightAxis.setLogarithmic(true);
+            rightAxis.getLabels().setGridVisible(false);
+
+            axisManager.setAxesBounds(new Vector(Arrays.<AxisManager.AxisBounds>asList(new AxisManager.AxisBounds("Left Axis", 0.0, false, 1.0, false), new AxisManager.AxisBounds("Bottom Axis", 0.0, false, 1.0, false), new AxisManager.AxisBounds("Right Axis", 0.1, true, 1000000, true))));
+            MonitorDataSet mainMonitor = null;
+            MonitorDataSet maxMonitor = null;
+            MonitorDataSet meanMonitor = null;
+            MonitorDataSet minMonitor = null;
+            MonitorDataSet convMonitor = null;
+            MonitorDataSet convergedMonitor = null;
+
+            for (DataSet mds : mp.getDataSetManager().getObjects()) {
+                if (mds.getName().contains(_asymptotic_tag + " " + _max_tag)) {
+                    maxMonitor = (MonitorDataSet) mds;
+                } else if (mds.getName().contains(_asymptotic_tag + " " + _min_tag)) {
+                    minMonitor = (MonitorDataSet) mds;
+                } else if (mds.getName().contains(_asymptotic_tag + " " + _mean_tag)) {
+                    meanMonitor = (MonitorDataSet) mds;
+                } else if (mds.getName().contains(_asymptotic_tag + " " + _convergence_tag)) {
+                    convMonitor = (MonitorDataSet) mds;
+                } else if (mds.getName().contains(_converged_report_name)) {
+                    convergedMonitor = (MonitorDataSet) mds;
+                } else {
+                    mainMonitor = (MonitorDataSet) mds;
+                }
+            }
+
+            mp.setDataSeriesOrder(new NeoObjectVector(new Object[]{mainMonitor, maxMonitor, meanMonitor, minMonitor, convMonitor, convergedMonitor}));
+            maxMonitor.setSeriesNameLocked(true);
+            maxMonitor.setSeriesName(root + " " + _asymptotic_tag + " " + _max_tag);
+            meanMonitor.setSeriesNameLocked(true);
+            meanMonitor.setSeriesName(root + " " + _asymptotic_tag + " " + _mean_tag);
+            minMonitor.setSeriesNameLocked(true);
+            minMonitor.setSeriesName(root + " " + _asymptotic_tag + " " + _min_tag);
+            mainMonitor.setSeriesNameLocked(true);
+            mainMonitor.setSeriesName(root);
+            convMonitor.setSeriesNameLocked(true);
+            convMonitor.setSeriesName(root + " " + _asymptotic_tag + " " + _convergence_tag);
+            convergedMonitor.setSeriesNameLocked(true);
+            convergedMonitor.setSeriesName(_converged_report_name);
+
+            convMonitor.setYAxis(rightAxis);
+            convergedMonitor.setYAxis(rightAxis);
+            MultiColLegend multiColLegend_0 = mp.getLegend();
+            multiColLegend_0.setPositionInfo(0.8894736766815186, 0.7751479148864746, ChartPositionOption.Type.NORTH_EAST);
+
+            LineStyle lineStyle_0 = maxMonitor.getLineStyle();
+            lineStyle_0.setColor(new DoubleVector(new double[]{0.8899999856948853, 0.07000000029802322, 0.1899999976158142}));
+            lineStyle_0.setLineWidth(2.0);
+            lineStyle_0 = meanMonitor.getLineStyle();
+            lineStyle_0.setColor(new DoubleVector(new double[]{0.5, 0.5, 0.4099999964237213}));
+            lineStyle_0.setLineWidth(2.0);
+            lineStyle_0 = minMonitor.getLineStyle();
+            lineStyle_0.setColor(new DoubleVector(new double[]{0.2824000120162964, 0.23919999599456787, 0.5450999736785889}));
+            lineStyle_0.setLineWidth(2.0);
+            lineStyle_0 = mainMonitor.getLineStyle();
+            lineStyle_0.setColor(new DoubleVector(new double[]{0.0, 0.0, 0.0}));
+            lineStyle_0.setLineWidth(2.0);
+            lineStyle_0 = convMonitor.getLineStyle();
+            lineStyle_0.setColor(new DoubleVector(new double[]{0.2199999988079071, 0.3700000047683716, 0.05999999865889549}));
+            lineStyle_0.setLineWidth(2.0);
+            lineStyle_0 = convergedMonitor.getLineStyle();
+            lineStyle_0.setColor(new DoubleVector(new double[]{0.8980392217636108, 0.7529411911964417, 0.2980392277240753}));
+            lineStyle_0.setLineWidth(2.0);
+        }
+
+        private String getConvParamName() {
+            return _conv_crit_param_name_1 + "_" + this.report.getPresentationName();
+        }
+
+        private String getConvExpReportName() {
+            return this.report.getPresentationName() + " " + _asymptotic_tag + " " + _convergence_tag;
+        }
     }
 }
