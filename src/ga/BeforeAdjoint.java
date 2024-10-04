@@ -13,6 +13,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Vector;
 import star.automation.SimDriverWorkflow;
 import star.automation.SimDriverWorkflowManager;
@@ -29,8 +31,10 @@ import star.common.GlobalParameterBase;
 import star.common.GlobalParameterManager;
 import star.common.ReportCostFunction;
 import star.common.ScalarGlobalParameter;
+import star.common.SetParameterAutomationBlock;
 import star.common.Simulation;
 import star.common.StarMacro;
+import star.common.StarPlot;
 import star.common.SteadySolver;
 import star.meshing.AutoMeshOperation;
 import star.meshing.GeometricSensitivityOptions;
@@ -66,6 +70,7 @@ public class BeforeAdjoint extends StarMacro {
     final String ADJ = "RunAdj";
     final String SENS_EXT = ".sens";
     final String MACRO_MESSAGE_TAG = "BEFORE_ADJOINT: ";
+    final String[] conv_plots = new String[]{"CD Asy Convergence", "CL Asy Convergence", "Cm Asy Convergence", "WBM Asy Convergence"};
 
     @Override
     public void execute() {
@@ -87,15 +92,19 @@ public class BeforeAdjoint extends StarMacro {
     }
 
     private void runAdjoint() {
+        _sim.println(MACRO_MESSAGE_TAG + "runAdjoint method");
         _simOpMan.setSelectedWorkflow(_adjWorkflow);
         _adjWorkflow.reset();
         _adjWorkflow.execute();
     }
 
     private void runWorkflow(SimDriverWorkflow workflow) {
+        _sim.println(MACRO_MESSAGE_TAG + "runWorkflow method. Workflow = " + workflow);
         _simOpMan.setSelectedWorkflow(workflow);
         workflow.reset();
         workflow.execute();
+        printFinalParameterValues(workflow);
+        exportResiduals(workflow);
     }
     
     private void createSolutionHistorySnapshot(String snapshotName) {
@@ -110,8 +119,49 @@ public class BeforeAdjoint extends StarMacro {
         _oc1View.setStateName("Loiter");
         _oc2View.setStateName("Dash");
     }
+    
+    private void exportResiduals(SimDriverWorkflow workflow) {
+        _sim.println(MACRO_MESSAGE_TAG + "exportResiduals method for workflow " + workflow.getPresentationName());
+        StarPlot residuals = _sim.getPlotManager().getPlot("Residuals");
+        residuals.encode(_sim.getSessionDir() + File.separator + "res" + workflow.getPresentationName() + ".png", "png", 1920, 1200, true, false);
+        for (String s : conv_plots) {
+            StarPlot conv = _sim.getPlotManager().getPlot(s);
+            String report = conv.getPresentationName().split(" ")[0];
+            String cond = workflow.getPresentationName().split("_")[1];
+            String name = "conv_" + report + "_" + cond + ".png";
+            conv.encode(_sim.getSessionDir() + File.separator + name, "png", 1920, 1200, true, false);
+        }
+    }
+    
+    private void printFinalParameterValues(SimDriverWorkflow workflow) {
+        _sim.println(MACRO_MESSAGE_TAG + workflow.getPresentationName() + " final parameter values:");
+        for (SetParameterAutomationBlock block : getSetParameterOperations(workflow)) {
+            HashMap<String, Double> dict = getParameterValue(block);
+            for (Map.Entry<String, Double> entry : dict.entrySet()) {
+                _sim.println("\t" + MACRO_MESSAGE_TAG + entry.getKey() + ": " + entry.getValue());
+            }
+        }
+    }
+    
+    private ArrayList<SetParameterAutomationBlock> getSetParameterOperations(SimDriverWorkflow workflow) {
+        _sim.println(MACRO_MESSAGE_TAG + "getSetParameterOperations method for workflow " + workflow.getPresentationName());
+        ArrayList<SetParameterAutomationBlock> blocks = new ArrayList<>();
+        for (SetParameterAutomationBlock block : workflow.getBlocks().getObjectsOf(SetParameterAutomationBlock.class)) {
+            blocks.add(block);
+        }
+        return blocks;
+    }
+    
+    private HashMap<String, Double> getParameterValue(SetParameterAutomationBlock block) {
+        _sim.println(MACRO_MESSAGE_TAG + "getParameterValue method for SetParameterAutomationBlock " + block.getPresentationName());
+        HashMap<String, Double> dict = new HashMap<>();
+        ScalarGlobalParameter param = (ScalarGlobalParameter) block.getParameter();
+        dict.put(param.getPresentationName(), param.getQuantity().getRawValue());
+        return dict;        
+    }
 
     private void exportSensitivities(boolean op1) {
+        _sim.println(MACRO_MESSAGE_TAG + "exportSensitivities method. op1 = " + Boolean.toString(op1));
         for (Report report : _reportsWithSens) {
             String oc = op1 ? "_1" : "_2";
             oc += SENS_EXT;
@@ -121,6 +171,8 @@ public class BeforeAdjoint extends StarMacro {
     }
     
     private void writeSensitivitiesToFile(Report report, LongVector paramIds, String fileName) {
+        String r = report.getPresentationName();
+        _sim.println(MACRO_MESSAGE_TAG + "writeSensitivitiesToFile method. Report = " + r + ", fileName = " + fileName);
         final String SENSITIVITIES_TAG = "Sensitivities"; // NOI18N
         final String PARAMETER_ID_TAG = "ParameterId"; // NOI18N
         final String SENSITIVITY_TAG = "Sensitivity"; // NOI18N
@@ -190,7 +242,8 @@ public class BeforeAdjoint extends StarMacro {
     }
     
     private boolean oc2HasRun() {
-        ScalarGlobalParameter dummyConv2 = (ScalarGlobalParameter) _sim.get(GlobalParameterManager.class).getObject("DummyConv2");
+        _sim.println(MACRO_MESSAGE_TAG + "oc2HasRun method");
+        ScalarGlobalParameter dummyConv2 = (ScalarGlobalParameter) _sim.get(GlobalParameterManager.class).getObject("Asym_Conv_OC1");
         boolean hasRun = dummyConv2.getQuantity().getRawValue() > 0.0;
         return hasRun;        
     }

@@ -38,6 +38,7 @@ public class BeforeSolver extends StarMacro {
     final String OC2_2_PRIMAL = "Primal_Dash2";
     final String ADJ = "RunAdj";
     final String MACRO_MESSAGE_TAG = "BEFORE_SOLVER: ";
+    final String[] conv_plots = new String[]{"CD Asy Convergence", "CL Asy Convergence", "Cm Asy Convergence", "WBM Asy Convergence"};
     
     @Override
     public void execute() {
@@ -97,9 +98,14 @@ public class BeforeSolver extends StarMacro {
     private void exportResiduals(SimDriverWorkflow workflow) {
         _sim.println(MACRO_MESSAGE_TAG + "exportResiduals method for workflow " + workflow.getPresentationName());
         StarPlot residuals = _sim.getPlotManager().getPlot("Residuals");
-        StarPlot conv = _sim.getPlotManager().getPlot("Conv");
         residuals.encode(_sim.getSessionDir() + File.separator + "res" + workflow.getPresentationName() + ".png", "png", 1920, 1200, true, false);
-        conv.encode(_sim.getSessionDir() + File.separator + "conv" + workflow.getPresentationName() + ".png", "png", 1920, 1200, true, false);
+        for (String s : conv_plots) {
+            StarPlot conv = _sim.getPlotManager().getPlot(s);
+            String report = conv.getPresentationName().split(" ")[0];
+            String cond = workflow.getPresentationName().split("_")[1];
+            String name = "conv_" + report + "_" + cond + ".png";
+            conv.encode(_sim.getSessionDir() + File.separator + name, "png", 1920, 1200, true, false);
+        }
     }
     
     private void initialize() {

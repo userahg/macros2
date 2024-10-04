@@ -47,6 +47,7 @@ public class BeforeResults extends StarMacro {
     final String OC2_2_PRIMAL = "Primal_Dash2";
     final String ADJ = "RunAdj";
     final String MACRO_MESSAGE_TAG = "BEFORE_RESULTS: ";
+    final String[] conv_plots = new String[]{"CD Asy Convergence", "CL Asy Convergence", "Cm Asy Convergence", "WBM Asy Convergence"};
 
     @Override
     public void execute() {
@@ -98,9 +99,11 @@ public class BeforeResults extends StarMacro {
     private void exportResiduals(SimDriverWorkflow workflow) {
         _sim.println(MACRO_MESSAGE_TAG + "exportResiduals method for workflow " + workflow.getPresentationName());
         StarPlot residuals = _sim.getPlotManager().getPlot("Residuals");
-        StarPlot conv = _sim.getPlotManager().getPlot("Conv");
         residuals.encode(_sim.getSessionDir() + File.separator + "res" + workflow.getPresentationName() + ".png", "png", 1920, 1200, true, false);
-        conv.encode(_sim.getSessionDir() + File.separator + "conv" + workflow.getPresentationName() + ".png", "png", 1920, 1200, true, false);
+        for (String s : conv_plots) {
+            StarPlot conv = _sim.getPlotManager().getPlot(s);
+            conv.encode(_sim.getSessionDir() + File.separator + "conv" + workflow.getPresentationName() + ".png", "png", 1920, 1200, true, false);
+        }
     }
 
     private ArrayList<SetParameterAutomationBlock> getSetParameterOperations(SimDriverWorkflow workflow) {
@@ -121,7 +124,8 @@ public class BeforeResults extends StarMacro {
     }
 
     private boolean oc2HasRun() {
-        ScalarGlobalParameter dummyConv2 = (ScalarGlobalParameter) _sim.get(GlobalParameterManager.class).getObject("DummyConv2");
+        _sim.println(MACRO_MESSAGE_TAG + "oc2HasRun method");
+        ScalarGlobalParameter dummyConv2 = (ScalarGlobalParameter) _sim.get(GlobalParameterManager.class).getObject("Asym_Conv_OC1");
         boolean hasRun = dummyConv2.getQuantity().getRawValue() > 0.0;
         return hasRun;
     }
