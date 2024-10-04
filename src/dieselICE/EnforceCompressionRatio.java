@@ -9,12 +9,10 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 import star.common.Simulation;
 import star.common.StarMacro;
@@ -28,7 +26,7 @@ import star.starcad2.StarCadDocumentManager;
  */
 public class EnforceCompressionRatio extends StarMacro {
 
-    String nx_exe = "E:\\Siemens\\NX\\NX2007\\NXBIN\\run_journal.exe";
+    static final String RUN_JOURNAL_SCRIPT = "/u/cd8unu/projects/ICE/CAD/python/run_journal.sh";
     String cadFileName = "ICE_Demo_Model.prt";
     String floatingParamName = "SCALE_FACTOR";
     String crMacro = "CR_opt.py";
@@ -48,7 +46,7 @@ public class EnforceCompressionRatio extends StarMacro {
 
     private void runCompressionRatioMacro(StarCadDocument doc) {
         String py_mac = doc.getCadFileDir() + File.separator + "python" + File.separator + crMacro;
-        ProcessBuilder pb = new ProcessBuilder(nx_exe, py_mac);
+        ProcessBuilder pb = new ProcessBuilder(RUN_JOURNAL_SCRIPT, py_mac);
         try {
             Process proc = pb.inheritIO().start();
             proc.waitFor(2l, TimeUnit.MINUTES);
@@ -71,26 +69,6 @@ public class EnforceCompressionRatio extends StarMacro {
                 print(ex);
             }
         }
-    }
-
-    private StringWriter inheritIO(final InputStream src) {
-        StringWriter sw = new StringWriter();
-        PrintWriter pw = new PrintWriter(sw);
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                Scanner scanner = new Scanner(src);
-                while (scanner.hasNextLine()) {
-                    pw.println(scanner.nextLine());
-                }
-            }
-        }).start();
-        return sw;
-    }
-    
-    private String getTempCADFileName() {
-        String prefix = cadFileName.replace(".prt", "");
-        return prefix + "_tmp.prt";
     }
     
     private String getParameterPresentationName() {
