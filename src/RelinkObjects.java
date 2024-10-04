@@ -34,7 +34,7 @@ public class RelinkObjects extends MdxMacro {
         _proj = getActiveMdxProject();
 
         for (MdxDesignStudy study : _proj.getDesignStudyManager().getDesignStudies()) {
-            MdxReferenceSimulation refSim = study.getReferenceSimulationGroup().getObjects().toArray(new MdxReferenceSimulation[1])[0];
+            MdxReferenceSimulation refSim = (MdxReferenceSimulation) study.getReferenceSimulationGroup().getObjects().toArray()[0];
             for (MdxStudyParameterBase studyObj : study.getStudyParameters().getObjects()) {
                 if (studyObj.getReferenceParameter() == null) {
                     String name = studyObj.getPresentationName();
