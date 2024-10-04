@@ -3,7 +3,6 @@
 package adjointCAD;
 
 import star.common.*;
-import star.base.neo.*;
 
 public class GetSensitivitesInUnits extends StarMacro {
 
